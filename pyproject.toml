@@ -1,0 +1,28 @@
+[project]
+name = "antiplagiat_module"
+version = "0.4.0"
+description = ""
+authors = [
+    {name = "GDD6147",email = "glukhikhddfs@mail.ru"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi (>=0.121.2,<0.122.0)",
+    "uvicorn[standard] (>=0.38.0,<0.39.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "pydantic (>=2.12.4,<3.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "sqlalchemy (>=2.0.44,<3.0.0)",
+    "asyncpg (>=0.30.0,<0.31.0)",
+    "pydantic-settings (>=2.12.0,<3.0.0)",
+    "alembic (>=1.18.4,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "test_project", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS code_submissions (
+    id BIGSERIAL PRIMARY KEY,
+    "taskId" INTEGER NOT NULL,
+    language VARCHAR(50) NOT NULL,
+    "submissionDate" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    code TEXT NOT NULL,
+    code_hash VARCHAR(64) NOT NULL,
+);
+
+CREATE INDEX idx_solutions_task_hash ON solutions("taskId", code_hash);
+CREATE INDEX idx_solutions_task ON solutions("taskId");
+CREATE INDEX idx_solutions_hash ON solutions(code_hash);
