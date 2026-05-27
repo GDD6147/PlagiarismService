@@ -90,30 +90,6 @@ async def check_single_solution_with_timeout(
         print(f"Таймаут для {submission.id}")
         return 0.0, [], submission
 
-
-async def aggregate_methods_results(
-    all_results: List[Tuple[float, List[MethodResult], object]],
-    existing_results: List[MethodResult]
-) -> List[MethodResult]:
-    methods_dict = {m.methodName: m for m in existing_results}
-    
-    for _, methods_results, _ in all_results:
-        for mr in methods_results:
-            sim_value = mr.similarity if not math.isnan(mr.similarity) else 0.0
-            
-            if mr.methodName in methods_dict:
-                if sim_value > methods_dict[mr.methodName].similarity:
-                    methods_dict[mr.methodName].similarity = sim_value
-                    methods_dict[mr.methodName].details = mr.details
-            else:
-                methods_dict[mr.methodName] = MethodResult(
-                    methodName=mr.methodName,
-                    similarity=sim_value,
-                    details=mr.details
-                )
-    
-    return list(methods_dict.values())
-
 def init_methods_results() -> List[MethodResult]:
     return [MethodResult(
         methodName=name,
@@ -151,7 +127,7 @@ async def check_solution(
     code_hash = compute_code_hash(payload.code)
     print(f"Обнаружен ЯП: {language}, code_hash: {code_hash[:16]}...")
 
-    # Сначала проверяем, есть ли уже такое решение в БД (дубликат)
+    # Поиск дупликата
     selected = select(CodeSubmission).where(
         and_(
             CodeSubmission.task_id == payload.taskId,
@@ -321,14 +297,12 @@ async def get_submissions_by_task(
     result = await db.execute(stmt)
     submissions = result.scalars().all()
     
-    return [
-        {
+    return [{
             "id": s.id,
             "code_hash": s.code_hash,
             "language": s.language,
             "task_id": s.task_id,
-            "submission_date": s.submissionDate.isoformat() if s.submissionDate else None
-        }
+            "submission_date": s.submissionDate.isoformat() if s.submissionDate else None}
         for s in submissions
     ]
 
