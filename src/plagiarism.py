@@ -3,10 +3,11 @@ import ast
 import hashlib
 import math
 from difflib import SequenceMatcher
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from collections import Counter
 from src.models import MethodResult
 
+PARSERS_CACHE = {}
 COMMON_KEYWORDS = {
     'if', 'else', 'for', 'while', 'return', 'class', 'def', 'using', 
     'namespace', 'public', 'private', 'protected', 'static', 'void',
@@ -22,15 +23,6 @@ class TokenizeMode:
     FULL = "full"
     IDENTIFIERS = "id"
     KEYWORDS = "kwords"
-
-def detect_language(code: str) -> str:
-    csharp_markers = ["using ", "namespace ", "public class", ";"]
-    python_markers = ["def ", "import ", ":"]
-
-    cs_score = sum(m in code for m in csharp_markers)
-    py_score = sum(m in code for m in python_markers)
-
-    return "csharp" if cs_score > py_score else "python"
 
 def remove_comments(code: str, language: str) -> str:
     if language == "python":
@@ -248,58 +240,14 @@ def cosine_similarity_code(code_a: str, code_b: str) -> float:
     
     return safe_divide(dot_product, norm_a * norm_b)
 
-
-# # 5. Расстояние Левенштейна
-# def levenshtein_distance(s1: str, s2: str) -> int:
-#     if len(s1) < len(s2):
-#         return levenshtein_distance(s2, s1)
-    
-#     if len(s2) == 0:
-#         return len(s1)
-    
-#     previous_row = list(range(len(s2) + 1))
-#     for i, c1 in enumerate(s1):
-#         current_row = [i + 1]
-#         for j, c2 in enumerate(s2):
-#             insertions = previous_row[j + 1] + 1
-#             deletions = current_row[j] + 1
-#             substitutions = previous_row[j] + (c1 != c2)
-#             current_row.append(min(insertions, deletions, substitutions))
-#         previous_row = current_row
-    
-#     return previous_row[-1]
-
-
-# def levenshtein_similarity(code_a: str, code_b: str) -> float:
-#     normalized_a = re.sub(r'\s+', ' ', code_a.strip())
-#     normalized_b = re.sub(r'\s+', ' ', code_b.strip())
-    
-#     if not normalized_a and not normalized_b:
-#         return 1.0
-#     if not normalized_a or not normalized_b:
-#         return 0.0
-    
-#     distance = levenshtein_distance(normalized_a, normalized_b)
-#     max_len = max(len(normalized_a), len(normalized_b))
-#     similarity = 1 - (distance / max_len) if max_len > 0 else 0.0
-#     return max(0.0, 0.0 if math.isnan(similarity) else similarity)
-
-
-# # 6. Jaccard (дополнительный метод)
-# def jaccard_similarity(code_a: str, code_b: str) -> float:
-#     tokens_a = set(tokenize_code(code_a, mode = TokenizeMode.IDENTIFIERS))
-#     tokens_b = set(tokenize_code(code_b, mode = TokenizeMode.IDENTIFIERS))
-    
-#     if not tokens_a or not tokens_b:
-#         return 0.0
-    
-#     intersection = len(tokens_a & tokens_b)
-#     union = len(tokens_a | tokens_b)
-#     return safe_divide(intersection, union)
-
-
 # Основная функция
-def compare_codes_with_methods(code_a: str, code_b: str, language: str) -> Tuple[float, List[MethodResult]]:
+def compare_codes_with_methods(
+    code_a: str, 
+    code_b: str, 
+    language: str,
+    weights: Dict[str, float] = None
+) -> Tuple[float, List[MethodResult]]:
+    
     norm_a = normalize_code(code_a, language, NormalizeMode.SIMPLE)
     norm_b = normalize_code(code_b, language, NormalizeMode.SIMPLE)
 
@@ -307,17 +255,9 @@ def compare_codes_with_methods(code_a: str, code_b: str, language: str) -> Tuple
     shingling_standard_sim = shingling_similarity(norm_a, norm_b)
     shingling_char_sim = character_shingling_similarity(norm_a, norm_b)
     shingling_struct_sim = structural_shingling_similarity(norm_a, norm_b)
-    print()
     combined_shingling = max(shingling_standard_sim, shingling_char_sim, shingling_struct_sim)
     hash_sim = hash_similarity(norm_a, norm_b)
     cosine_sim = cosine_similarity_code(norm_a, norm_b)
-
-    weights = {
-        'ast': 0.30,
-        'shingling': 0.25,
-        'hashing': 0.20,
-        'cosine': 0.25,
-    }
     
     combined_similarity = (
         weights['ast'] * (0.0 if math.isnan(ast_sim) else ast_sim) +
@@ -330,30 +270,29 @@ def compare_codes_with_methods(code_a: str, code_b: str, language: str) -> Tuple
         MethodResult(
             methodName="AST Structural Analysis",
             similarity=round(ast_sim, 4),
-            details={"ast_nodes_a": len(get_ast_sequence(norm_a, language)), 
-                    "ast_nodes_b": len(get_ast_sequence(norm_b, language))}
+            details={"Ноды проверяемого кода": len(get_ast_sequence(norm_a, language)), 
+                    "Ноды оригинального кода": len(get_ast_sequence(norm_b, language)),
+                    "Вес алгоритма": weights['ast']}
         ),
         MethodResult(
             methodName="Shingling (n-grams)",
             similarity=round(combined_shingling, 4),
-            details={"methods": "Token + Character + Structural n-grams"}
+            details={"Методы": "Token + Character + Structural n-grams",
+                    "Вес алгоритма": weights['shingling']}
         ),
         MethodResult(
             methodName="Hashing (MD5 blocks)",
             similarity=round(hash_sim, 4),
             details={"blocks_a": len(extract_code_blocks(norm_a)), 
-                    "blocks_b": len(extract_code_blocks(norm_b))}
+                    "blocks_b": len(extract_code_blocks(norm_b)),
+                    "Вес алгоритма": weights['hashing']}
         ),
         MethodResult(
             methodName="Cosine Similarity",
             similarity=round(cosine_sim, 4),
             details={"unique_tokens_a": len(set(tokenize_code(norm_a, mode = TokenizeMode.FULL))), 
-                    "unique_tokens_b": len(set(tokenize_code(norm_b, mode = TokenizeMode.FULL)))}
-        ),
-        MethodResult(
-            methodName="Combined Method",
-            similarity=round(combined_similarity, 4),
-            details=weights
+                    "unique_tokens_b": len(set(tokenize_code(norm_b, mode = TokenizeMode.FULL))),
+                    "Вес алгоритма": weights['cosine']}
         )
     ]
     
